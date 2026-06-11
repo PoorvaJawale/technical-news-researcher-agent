@@ -1,0 +1,454 @@
+{
+  "name": "Daily Report Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\nr.title,\np.summary,\np.primary_category,\np.relevance_score,\np.sentiment,\np.business_impact,\nr.source_name\nFROM processed_articles p\nJOIN raw_articles r\nON p.raw_article_id = r.id\nORDER BY p.relevance_score DESC\nLIMIT 20;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "705843b9-1354-4e7c-9a07-50650d863003",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "spwas3iEGoprsH4k",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const articles = items.map(item => {\n\nreturn `\nTitle: ${item.json.title}\nCategory: ${item.json.primary_category}\nScore: ${item.json.relevance_score}\nSentiment: ${item.json.sentiment}\nImpact: ${item.json.business_impact}\n\nSummary:\n${item.json.summary}\n`;\n\n});\n\nreturn [{\njson: {\narticles: articles.join('\\n\\n---\\n\\n')\n}\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "92c8535c-b968-40e8-a155-09a0dbb19d37",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a senior technology analyst writing a daily briefing.\n\nUse the articles below.\n\n{{$json.articles}}\n\nWrite a Daily Technology Intelligence Report with these exact sections:\n\n1. Executive Summary\n2. Top Stories\n3. AI News\n4. Startup News\n5. Open Source and Developer Tools\n6. Key Takeaways\n\nRules:\n- Plain text only\n- No asterisks anywhere\n- No dashes used as decorators\n- No markdown of any kind\n- No bold or italic symbols\n- Use simple numbered lists inside each section\n- Each story gets one line title and one line summary\n- Keep the full report under 1800 characters total"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        624,
+        0
+      ],
+      "id": "51d546df-28a9-4da1-b3d9-84f877e5e27a",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "E2zmBb4UngE1q4TK",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "reports",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "report_type": "DAILY",
+            "content": "={{$json.output[0].content[0].text}}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "report_type",
+              "displayName": "report_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "generated_at",
+              "displayName": "generated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        976,
+        0
+      ],
+      "id": "68a7ded3-8009-49ea-ad63-b1b138137074",
+      "name": "Insert rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "spwas3iEGoprsH4k",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const report = $json.content;\nconst chunkSize = 1900;\nconst chunks = [];\n\nfor (let i = 0; i < report.length; i += chunkSize) {\n  chunks.push({\n    json: {\n      content: report.slice(i, i + chunkSize)\n    }\n  });\n}\n\nreturn chunks;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        0
+      ],
+      "id": "c7433932-492d-49c9-be7a-c5e873d9ed19",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1392,
+        0
+      ],
+      "id": "68dc59ad-d7bf-45e6-b74c-59459b1f56d9",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1513827552295391306/ufEqVnpREi0Yy6L2IQvWYSYaos0hv2M1pabvIWrkAoYB5j_cAUOevCEIwa928uLPzb6w",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{$json.content}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1584,
+        144
+      ],
+      "id": "1a4172f2-3fb7-47b5-a6d7-6f94b0f7f3cc",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "9cdb04ab-862c-4c9b-a70c-53e5d13c3f71",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0BABPSE480",
+          "mode": "list",
+          "cachedResultName": "daily-tech-report"
+        },
+        "text": "={{ $('Code in JavaScript1').first().json.content }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1792,
+        144
+      ],
+      "id": "2a6f3a7d-cf62-48d4-b46f-e6e36162fb2f",
+      "name": "Send a message1",
+      "webhookId": "0b5fb0dd-0851-4815-94b3-98f968c5a39f",
+      "credentials": {
+        "slackApi": {
+          "id": "lrUHLJX2dKBqTS6q",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -32,
+        192
+      ],
+      "id": "88e0c798-74dc-45f3-aaa1-f6a7b2405222",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "sendTo": "poorvakjawale@gmail.com",
+        "subject": "=Daily Tech Report - {{ $now.format('MMMM d yyyy') }}",
+        "message": "=<html>\n<body style=\"font-family: Arial, sans-serif; font-size: 14px; line-height: 1.8; color: #222;\">\n<pre style=\"font-family: Arial, sans-serif; font-size: 14px; line-height: 1.8; white-space: pre-wrap; word-wrap: break-word;\">\n{{ $('Code in JavaScript1').first().json.content }}\n</pre>\n</body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2000,
+        144
+      ],
+      "id": "5e5a8a06-41b1-4f0c-b898-b208ccc4cd37",
+      "name": "Send a message",
+      "webhookId": "2542e871-008c-472d-9480-f871d8cf1552",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vdQrLDNCGCAZfYob",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5755244115",
+        "text": "={{ $('Code in JavaScript1').first().json.content }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2208,
+        144
+      ],
+      "id": "3d125483-28c6-4391-b8e2-4667a05fc50e",
+      "name": "Send a text message",
+      "webhookId": "3f9c47c2-7311-4d43-a08e-743061d54f2c",
+      "credentials": {
+        "telegramApi": {
+          "id": "HgOpFCHV2CjeoaNN",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "666c397a-c67d-49c8-8adc-6c89c35eeca6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0cfeefe32a32ad02752ad34992d11c7f7630f24d2201858af07f629bef0b8c4d"
+  },
+  "id": "c9CqF8G0siL0jZ8N",
+  "tags": []
+}

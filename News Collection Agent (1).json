@@ -1,0 +1,588 @@
+{
+  "name": "News Collection Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */3 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -704,
+        192
+      ],
+      "id": "b99e4927-a8d4-4b0c-9646-bb0d4784b79e",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/search/repositories",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "created:>2026-06-01 stars:>10"
+            },
+            {
+              "name": "sort",
+              "value": "stars"
+            },
+            {
+              "name": "order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "20"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        160,
+        592
+      ],
+      "id": "b5988ad0-f605-421e-9951-41c475d09b4f",
+      "name": "GitHub Trending"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst normalized = [];\n\nfor (const item of items) {\n  const d = item.json;\n\n  // RSS Feed Read node output (Guardian, HackerNews, TechCrunch, Reddit)\n  if (d.title && d.link && (d.pubDate || d.isoDate)) {\n    let sourceName = 'RSS';\n    if (d.link.includes('theguardian')) sourceName = 'The Guardian';\n    else if (d.link.includes('ycombinator') || d.link.includes('hnrss')) sourceName = 'Hacker News';\n    else if (d.link.includes('techcrunch')) sourceName = 'TechCrunch';\n    else if (d.link.includes('reddit')) sourceName = 'Reddit';\n\n    normalized.push({\n      json: {\n        source: sourceName.toLowerCase().replace(/\\s/g, '_'),\n        title: d.title || '',\n        url: d.link || '',\n        published_at: new Date(d.isoDate || d.pubDate || Date.now()).toISOString().replace('T', ' ').replace('Z', ''),\n        raw_content: d.contentSnippet || d.content || d.title || '',\n        author: d.creator || d.author || '',\n        source_name: sourceName,\n        status: 'PENDING'\n      }\n    });\n  }\n  // GitHub (HTTP Request node — returns items array)\n  else if (d.items) {\n    for (const repo of d.items) {\n      if (repo.full_name) {\n        normalized.push({\n          json: {\n            source: 'github',\n            title: repo.full_name + ' — ' + (repo.description || ''),\n            url: repo.html_url || '',\n            published_at: new Date(repo.created_at || Date.now()).toISOString().replace('T', ' ').replace('Z', ''),\n            raw_content: repo.description || '',\n            author: repo.owner?.login || '',\n            source_name: 'GitHub Trending',\n            status: 'PENDING'\n          }\n        });\n      }\n    }\n  }\n  // GitHub individual item\n  else if (d.full_name && d.stargazers_count !== undefined) {\n    normalized.push({\n      json: {\n        source: 'github',\n        title: d.full_name + ' — ' + (d.description || ''),\n        url: d.html_url || '',\n        published_at: new Date(d.isoDate || d.pubDate || Date.now()).toISOString().replace('T', ' ').replace('Z', ''),\n        raw_content: d.description || '',\n        author: d.owner?.login || '',\n        source_name: 'GitHub Trending',\n        status: 'PENDING'\n      }\n    });\n  }\n}\n\nreturn normalized;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        240
+      ],
+      "id": "9d3a4265-27e2-4dcc-a3f7-05bdf843b0c6",
+      "name": "normalise node"
+    },
+    {
+      "parameters": {
+        "numberInputs": 5
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        816,
+        224
+      ],
+      "id": "58f50c9a-f493-4626-91db-c994bea1f053",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "url": "https://techcrunch.com/feed/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"{ posts(first: 20, order: VOTES) { edges { node { name tagline url votesCount createdAt topics { edges { node { name } } } } } } }\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        48,
+        384
+      ],
+      "id": "1a6f687f-9016-4ba0-8ced-0ffd1ad3c110",
+      "name": "TechCrunch RSS"
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.theguardian.com/theguardian/technology/rss",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "section",
+              "value": "technology"
+            },
+            {
+              "name": "order-by",
+              "value": "newest"
+            },
+            {
+              "name": "page-size",
+              "value": "20"
+            },
+            {
+              "name": "api-key",
+              "value": "2c08788b-f53e-42db-8c4b-d1338c805026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -64,
+        -192
+      ],
+      "id": "ea9b7b17-9989-445e-b4ab-f560362e30de",
+      "name": "guardian"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "raw_articles",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "source": "={{$json.source}}",
+            "title": "={{$json.title}}",
+            "url": "={{$json.url}}",
+            "published_at": "={{$json.published_at}}",
+            "raw_content": "={{$json.raw_content}}",
+            "author": "={{$json.author}}",
+            "source_name": "={{$json.source_name}}",
+            "status": "={{$json.status}}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "raw_content",
+              "displayName": "raw_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "author",
+              "displayName": "author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_name",
+              "displayName": "source_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "skipOnConflict": true
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1392,
+        240
+      ],
+      "id": "30661cd0-3d55-47a7-9d90-82006e0a41b7",
+      "name": "Insert rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "spwas3iEGoprsH4k",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.theguardian.com/theguardian/technology/rss",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        192,
+        -208
+      ],
+      "id": "fa0b0358-4c4a-4918-b309-c78270a1627d",
+      "name": "RSS Read1"
+    },
+    {
+      "parameters": {
+        "url": "https://www.technologyreview.com/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        432,
+        224
+      ],
+      "id": "764a5b11-409f-4849-bfde-24b7f17a1ed5",
+      "name": "RSS Read3",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "https://techcrunch.com/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        368
+      ],
+      "id": "b4f5928b-2eb9-4169-b303-5b3d99ce15a0",
+      "name": "RSS Read4"
+    },
+    {
+      "parameters": {
+        "url": "https://www.wired.com/feed/rss",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        160,
+        32
+      ],
+      "id": "7e5e2856-6e9f-4841-96f5-1870114356e1",
+      "name": "RSS Read"
+    },
+    {
+      "parameters": {
+        "url": "https://www.technologyreview.com/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -80,
+        224
+      ],
+      "id": "d64b0c8d-69f0-4c79-afd7-bc71780d5430",
+      "name": "TechnologyReview"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "0Yj0oif2BjS3LaQk",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/0Yj0oif2BjS3LaQk",
+          "cachedResultName": "AI Processing"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1808,
+        240
+      ],
+      "id": "beb24382-ae36-4d1d-b264-c678fdc697a4",
+      "name": "Call 'AI Processing'",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reset any articles that were already processed\n// so the AI Processing loop always has work to do\n// REMOVE THIS NODE before going to production\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        240
+      ],
+      "id": "fde6590f-3829-4bc0-a888-dfd60186a813",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "guardian",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TechnologyReview",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TechCrunch RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GitHub Trending",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub Trending": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "normalise node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "normalise node": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TechCrunch RSS": {
+      "main": [
+        [
+          {
+            "node": "RSS Read4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "guardian": {
+      "main": [
+        [
+          {
+            "node": "RSS Read1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read3": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "RSS Read4": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TechnologyReview": {
+      "main": [
+        [
+          {
+            "node": "RSS Read3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Call 'AI Processing'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "eacd1d42-18f9-4c32-9d9a-036246b3f2f4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0cfeefe32a32ad02752ad34992d11c7f7630f24d2201858af07f629bef0b8c4d"
+  },
+  "id": "smNfmIPVzPL9TePt",
+  "tags": []
+}

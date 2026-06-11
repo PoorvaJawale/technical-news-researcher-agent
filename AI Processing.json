@@ -1,0 +1,473 @@
+{
+  "name": "AI Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\nid,\ntitle,\nraw_content,\nsource_name,\nurl\nFROM raw_articles\nWHERE status = 'PENDING'\n   OR (status = 'PROCESSED' AND created_at >= NOW() - INTERVAL '1 hour')\nORDER BY created_at DESC\nLIMIT 50;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "58764242-c7f1-4a3b-b1ef-29a4d21a918b",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "spwas3iEGoprsH4k",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "03b6e901-7682-4e68-bced-ca3d7e35d02a",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a technology news analyst.\n\nReturn ONLY raw JSON with no markdown, no asterisks, no code blocks, no formatting symbols.\n\n{\n  \"summary\": \"\",\n  \"categories\": [],\n  \"primary_category\": \"\",\n  \"relevance_score\": 0,\n  \"sentiment\": \"\",\n  \"business_impact\": \"\",\n  \"key_companies\": [],\n  \"key_technologies\": [],\n  \"article_type\": \"\"\n}\n\nTitle:\n{{ $json.title }}\n\nContent:\n{{ $json.raw_content }}\n\nSource:\n{{ $json.source_name }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        592,
+        160
+      ],
+      "id": "93e7ed82-dcef-4149-9a9b-9dc506fdf091",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "E2zmBb4UngE1q4TK",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let response =\n$input.first().json.output[0].content[0].text;\n\n// Remove markdown code fences\nresponse = response\n  .replace(/```json/g, '')\n  .replace(/```/g, '')\n  .trim();\n\nconst jsonMatch =\nresponse.match(/\\{[\\s\\S]*\\}/);\n\nif (!jsonMatch) {\n  throw new Error(\"No JSON found\");\n}\n\nconst parsed =\nJSON.parse(jsonMatch[0]);\n\nif (!$('Loop Over Items').item.json.id) {\n  throw new Error('raw_article_id missing');\n}\n\nreturn [{\n  json: {\n    raw_article_id: $('Loop Over Items').item.json.id,\n\n    title: $('Loop Over Items').item.json.title,\n\n    source_name: $('Loop Over Items').item.json.source_name,\n\n    summary: parsed.summary,\n\n    primary_category: parsed.primary_category,\n\n    relevance_score: parsed.relevance_score,\n\n    sentiment: parsed.sentiment,\n\n    business_impact: parsed.business_impact,\n\n    key_technologies: parsed.key_technologies,\n\n    categories: parsed.categories,\n\nkey_companies: parsed.key_companies,\n\narticle_type: parsed.article_type\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        112
+      ],
+      "id": "3f69750f-79a4-43f1-bd40-e7ebd7de3040",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "processed_articles",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "raw_article_id": 0,
+            "relevance_score": 0
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "raw_article_id",
+              "displayName": "raw_article_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "categories",
+              "displayName": "categories",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "primary_category",
+              "displayName": "primary_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "relevance_score",
+              "displayName": "relevance_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_impact",
+              "displayName": "business_impact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "key_companies",
+              "displayName": "key_companies",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "key_technologies",
+              "displayName": "key_technologies",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "article_type",
+              "displayName": "article_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source_name",
+              "displayName": "source_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        992,
+        368
+      ],
+      "id": "3cf556df-f7d3-40b4-b73c-1a70717dbea9",
+      "name": "Insert rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "spwas3iEGoprsH4k",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE raw_articles\nSET status='PROCESSED'\nWHERE id={{ $json.raw_article_id }};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1376,
+        368
+      ],
+      "id": "e9edaecf-bf47-4e4c-8529-dbef54ba461c",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "spwas3iEGoprsH4k",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a1d3ed37-ab28-49e7-9da0-d100cca1b28d",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -16,
+        192
+      ],
+      "id": "d6a310ba-6691-4457-bd4b-edee87e33df1",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "c9CqF8G0siL0jZ8N",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/c9CqF8G0siL0jZ8N",
+          "cachedResultName": "Daily Report Generator"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1232,
+        -48
+      ],
+      "id": "4ae5d574-b200-4c02-ba74-dc6545df8e91",
+      "name": "Call 'Daily Report Generator'1",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        768,
+        -32
+      ],
+      "id": "f768075d-acff-4bd5-b5cd-4e96490d2e5f",
+      "name": "No Operation, do nothing"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Operation, do nothing": {
+      "main": [
+        [
+          {
+            "node": "Call 'Daily Report Generator'1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5ded8a5d-d146-4c22-90d6-b02418fdf1df",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0cfeefe32a32ad02752ad34992d11c7f7630f24d2201858af07f629bef0b8c4d"
+  },
+  "id": "0Yj0oif2BjS3LaQk",
+  "tags": []
+}
